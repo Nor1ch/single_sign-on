@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sso/internal/app"
 	"sso/internal/config"
 	"sso/pkg/logger/slogpretty"
 )
@@ -11,4 +12,7 @@ func main() {
 
 	logger := slogpretty.New(cfg.Env)
 	logger.Info("service starting")
+
+	application := app.New(logger, cfg.GRPC.Port, cfg.StoragePath, cfg.TokenTTL)
+	application.GRPCServer.MustRun()
 }
