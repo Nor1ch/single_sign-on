@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"sso/internal/domain/models"
 	"sso/internal/storage"
+	"sso/pkg/jwt"
 	"time"
 )
 
@@ -26,6 +27,8 @@ type AppProvider interface {
 
 var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
+	ErrInvalidAppID       = errors.New("invalid app id")
+	ErrUserAlreadyExists  = errors.New("user already exists")
 )
 
 type Auth struct {
@@ -89,6 +92,15 @@ func (a *Auth) Login(ctx context.Context, email string, password string, appID i
 
 	log.Info("user logged in successfully")
 
+	token, err := jwt.NewToken(user, app, a.tokenTTL)
+	if err != nil {
+		a.log.Error("failed to generate token", slog.String("error", err.Error()))
+
+		return "", fmt.Errorf("%s: %w", op, err)
+	}
+
+	return token, nil
+
 }
 
 // RegisterNewUser registers new user in system and returns user ID.
@@ -109,6 +121,11 @@ func (a *Auth) RegisterNewUser(ctx context.Context, email string, password strin
 
 	id, err := a.userSaver.SaveUser(ctx, email, passHash)
 	if err != nil {
+		if errors.Is(err, storage.ErrUserExists) {
+			a.log.Warn("user already exists", slog.String("error", err.Error()))
+			return 0, fmt.Errorf("%s: %w", op, ErrInvalidCredentials)
+		}
+
 		log.Error("failed to save user", slog.String("error", err.Error()))
 		return 0, fmt.Errorf("%s: %w", op, err)
 	}
@@ -120,5 +137,25 @@ func (a *Auth) RegisterNewUser(ctx context.Context, email string, password strin
 
 // IsAdmin checks if user is admin
 func (a *Auth) IsAdmin(ctx context.Context, userID int64) (bool, error) {
-	panic("not implemented")
+	const op = "auth.IsAdmin"
+
+	log := a.log.With(
+		slog.String("op", op),
+		slog.Int64("user_id", userID),
+	)
+	log.Info("checking if user is admin")
+
+	isAdmin, err := a.userProvider.IsAdmin(ctx, userID)
+	if err != nil {
+		if errors.Is(err, storage.ErrAppNotFound) {
+			a.log.Warn("app not found", slog.String("error", err.Error()))
+			return false, fmt.Errorf("%s: %w", op, ErrInvalidAppID)
+		}
+
+		return false, fmt.Errorf("%s: %w", op, err)
+	}
+
+	log.Info("checked if user is admin", slog.Bool("is_admin", isAdmin))
+
+	return isAdmin, nil
 }
