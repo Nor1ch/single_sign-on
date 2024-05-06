@@ -29,6 +29,7 @@ var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrInvalidAppID       = errors.New("invalid app id")
 	ErrUserAlreadyExists  = errors.New("user already exists")
+	ErrUserNotFound       = errors.New("user not found")
 )
 
 type Auth struct {
@@ -123,7 +124,7 @@ func (a *Auth) RegisterNewUser(ctx context.Context, email string, password strin
 	if err != nil {
 		if errors.Is(err, storage.ErrUserExists) {
 			a.log.Warn("user already exists", slog.String("error", err.Error()))
-			return 0, fmt.Errorf("%s: %w", op, ErrInvalidCredentials)
+			return 0, fmt.Errorf("%s: %w", op, ErrUserAlreadyExists)
 		}
 
 		log.Error("failed to save user", slog.String("error", err.Error()))
